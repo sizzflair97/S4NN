@@ -14,9 +14,13 @@ from __future__ import division
 # if you have a CUDA-enabled GPU the set the GPU flag as True
 GPU=True
 
+import os
+import pdb
 import time
 from mnist import MNIST
 import numpy as np
+from tqdm.auto import tqdm
+import os.path as osp
 if GPU:
     import cupy as cp  # You need to have a CUDA-enabled GPU to use this package!
 else:
@@ -26,12 +30,12 @@ else:
 thr = [100, 100]  # The threshold of hidden and output neurons
 lr = [.2, .2]  # The learning rate of hidden and ouput neurons
 lamda = [0.000001, 0.000001]  # The regularization penalty for hidden and ouput neurons
-b = [5, 48]  # The upper bound of wight initializations for hidden and ouput neurons
-a = [0, 0]  # The lower bound of wight initializations for hidden and ouput neurons
+b = [5, 48]  # The upper bound of weight initializations for hidden and ouput neurons
+a = [0, 0]  # The lower bound of weight initializations for hidden and ouput neurons
 Nepoch = 100  # The maximum number of training epochs
 NumOfClasses = 10  # Number of classes
 Nlayers = 2  # Number of layers
-NhidenNeurons = 400  # Number of hidden neurons
+NhidenNeurons = 10  # Number of hidden neurons
 Dropout = [0, 0]
 tmax = 256  # Simulatin time
 GrayLevels = 255  # Image GrayLevels
@@ -40,10 +44,11 @@ gamma = 3  # The gamma parameter in the relative target firing calculation
 # General settings
 loading = False  # Set it as True if you want to load a pretrained model
 LoadFrom = "weights.npy"  # The pretrained model
-saving = False  # Set it as True if you want to save the trained model
+saving = True  # Set it as True if you want to save the trained model
 best_perf = 0
 Nnrn = [NhidenNeurons, NumOfClasses]  # Number of neurons at hidden and output layers
-cats = [4, 1, 0, 7, 9, 2, 3, 5, 8, 6]  # Reordering the categories
+# cats = [4, 1, 0, 7, 9, 2, 3, 5, 8, 6]  # Reordering the categoriescats
+cats = [*range(10)]  # Reordering the categories
 
 # General variables
 images = []  # To keep training images
@@ -58,7 +63,7 @@ target = cp.zeros([NumOfClasses])  # To keep the target firing times of current 
 FiringFrequency = []  # to count number of spikes each neuron emits during an epoch
 
 # loading MNIST dataset
-mndata = MNIST('MNIST/')
+mndata = MNIST('../data/mnist/MNIST/raw/')
 # mndata.gz = False
 
 Images, Labels = mndata.load_training()
@@ -106,13 +111,13 @@ if loading:
 SpikeList = [SpikeImage] + Spikes
 
 # Start learning
-for epoch in range(Nepoch):
+for epoch in tqdm(range(Nepoch), desc="Epoch"):
     start_time = time.time()
     correct = cp.zeros(NumOfClasses)
     FiringFrequency = cp.zeros((NhidenNeurons))
 
     # Start an epoch
-    for iteration in range(len(images)):
+    for iteration in tqdm(range(len(images)), desc="Iteration", leave=False):
         # converting input image into spiking image
         SpikeImage[:, :, :] = 0
         SpikeImage[x[0], x[1], images[iteration]] = 1
@@ -179,31 +184,32 @@ for epoch in range(Nepoch):
         W[layer] -= lr[layer] * delta_h[:, cp.newaxis, cp.newaxis] * hasFired_h  # Update input-hidden weights
         W[layer] -= lr[layer] * lamda[layer] * W[layer]  # Weight regularization
 
-    # Evaluating on test samples
-    correct = 0
-    for iteration in range(len(images_test)):
-        SpikeImage[:, :, :] = 0
-        SpikeImage[x[0], x[1], images_test[iteration]] = 1
-        for layer in range(Nlayers):
-            Voltage = cp.cumsum(cp.tensordot(W[layer], SpikeList[layer]), 1)
-            Voltage[:, tmax] = thr[layer] + 1
-            firingTime[layer] = cp.argmax(Voltage > thr[layer], axis=1).astype(float) + 1
-            firingTime[layer][firingTime[layer] > tmax] = tmax
-            Spikes[layer][:, :, :] = 0
-            Spikes[layer][X[layer][0], X[layer][1], firingTime[layer].reshape(Nnrn[layer], 1).astype(int)] = 1
-        minFiringTime = firingTime[Nlayers - 1].min()
-        if minFiringTime == tmax:
-            V = np.argmax(Voltage[:, tmax - 3])
-            if V == labels_test[iteration]:
-                correct += 1
-        else:
-            if firingTime[layer][labels_test[iteration]] == minFiringTime:
-                correct += 1
-    testPerf = correct / len(images_test)
+    # # Evaluating on test samples
+    # correct = 0
+    # for iteration in tqdm(range(len(images_test)), desc="Eval Testset", leave=False):
+    #     SpikeImage[:, :, :] = 0
+    #     SpikeImage[x[0], x[1], images_test[iteration]] = 1
+    #     for layer in range(Nlayers):
+    #         Voltage = cp.cumsum(cp.tensordot(W[layer], SpikeList[layer]), 1)
+    #         Voltage[:, tmax] = thr[layer] + 1
+    #         firingTime[layer] = cp.argmax(Voltage > thr[layer], axis=1).astype(float) + 1
+    #         firingTime[layer][firingTime[layer] > tmax] = tmax
+    #         Spikes[layer][:, :, :] = 0
+    #         Spikes[layer][X[layer][0], X[layer][1], firingTime[layer].reshape(Nnrn[layer], 1).astype(int)] = 1
+    #     minFiringTime = firingTime[Nlayers - 1].min()
+    #     if minFiringTime == tmax:
+    #         V = np.argmax(Voltage[:, tmax - 3])
+    #         if V == labels_test[iteration]:
+    #             correct += 1
+    #     else:
+    #         # if firingTime[layer][labels_test[iteration]] == minFiringTime:
+    #         if np.argmin(firingTime[-1]) == labels[iteration]:
+    #             correct += 1
+    # testPerf = correct / len(images_test)
 
     # Evaluating on train samples
     correct = 0
-    for iteration in range(len(images)):
+    for iteration in tqdm(range(len(images)), desc="Eval Trainset", leave=False):
         SpikeImage[:, :, :] = 0
         SpikeImage[x[0], x[1], images[iteration]] = 1
         for layer in range(Nlayers):
@@ -219,19 +225,35 @@ for epoch in range(Nepoch):
             if V == labels[iteration]:
                 correct += 1
         else:
-            if firingTime[layer][labels[iteration]] == minFiringTime:
+            # if firingTime[layer][labels[iteration]] == minFiringTime:
+            if np.argmin(firingTime[-1]) == labels[iteration]:
                 correct += 1
+        # if np.argmin(firingTime[-1]) == labels[iteration]:
+        #     correct += 1
     trainPerf = correct / len(images)
 
-    print('epoch= ', epoch, 'Perf_train= ', trainPerf, 'Perf_test= ', testPerf)
+    # print('epoch= ', epoch, 'Perf_train= ', trainPerf, 'Perf_test= ', testPerf)
+    print('epoch= ', epoch, 'Perf_train= ', trainPerf)
     print("--- %s seconds ---" % (time.time() - start_time))
 
     # To save the weights
     if saving:
-        np.save("weights", W, allow_pickle=True)
-        if testPerf > best_perf:
-            np.save("weights_best", W, allow_pickle=True)
-            best_perf = testPerf
+        # for layer in range(Nlayers):
+        #     np.save(f"weights_{layer}", W[layer].get())
+        # print("weights are saved.")
+        # if testPerf > best_perf:
+        #     np.save("weights_best", [W[i].get() for i in range(Nlayers)], allow_pickle=True)
+        #     best_perf = testPerf
+        save_dir_path = osp.join(
+            osp.dirname(__file__),
+            f"../models/{tmax}_784_{NhidenNeurons}_10")
+        if not osp.isdir(save_dir_path):
+            os.mkdir(save_dir_path)
+        if trainPerf > best_perf:
+            for layer in range(Nlayers):
+                np.save(osp.join(save_dir_path,f"weights_{layer}"), W[layer].get())
+            print("best weights are saved.")
+            best_perf = trainPerf
 
     # To find and reset dead neurons
     ResetCheck = FiringFrequency < 0.001 * len(images)
