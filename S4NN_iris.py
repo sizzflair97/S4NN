@@ -18,6 +18,7 @@ import os
 import pdb
 import time
 from mnist import MNIST
+from sklearn.datasets import load_iris
 import numpy as np
 from tqdm.auto import tqdm
 import os.path as osp
@@ -28,17 +29,16 @@ else:
 
 # Parameter setting
 thr = [100, 100]  # The threshold of hidden and output neurons
-lr = [.2, .2]  # The learning rate of hidden and ouput neurons
-lamda = [0.000001, 0.000001]  # The regularization penalty for hidden and ouput neurons
-b = [5, 50]  # The upper bound of weight initializations for hidden and ouput neurons
+lr = [0.2, 0.2]  # The learning rate of hidden and ouput neurons
+lamda = [0]*2  # The regularization penalty for hidden and ouput neurons
+b = [200, 50]  # The upper bound of weight initializations for hidden and ouput neurons
 a = [0, 0]  # The lower bound of weight initializations for hidden and ouput neurons
 Nepoch = 100  # The maximum number of training epochs
-NumOfClasses = 10  # Number of classes
+NumOfClasses = 3  # Number of classes
 Nlayers = 2  # Number of layers
 NhidenNeurons = 10  # Number of hidden neurons
 Dropout = [0, 0]
 tmax = 5  # Simulatin time
-GrayLevels = 255  # Image GrayLevels
 gamma = 3  # The gamma parameter in the relative target firing calculation
 
 # General settings
@@ -51,10 +51,10 @@ Nnrn = [NhidenNeurons, NumOfClasses]  # Number of neurons at hidden and output l
 cats = [*range(10)]  # Reordering the categories
 
 # General variables
-images = []  # To keep training images
-labels = []  # To keep training labels
-images_test = []  # To keep test images
-labels_test = []  # To keep test labels
+inputs_list = []  # To keep training images
+labels_list = []  # To keep training labels
+test_inputs_list = []  # To keep test images
+test_labels_list = []  # To keep test labels
 W = []  # To hold the weights of hidden and output layers
 firingTime = []  # To hold the firing times of hidden and output layers
 Spikes = []  # To hold the spike trains of hidden and output layers
@@ -63,33 +63,35 @@ target = cp.zeros([NumOfClasses])  # To keep the target firing times of current 
 FiringFrequency = []  # to count number of spikes each neuron emits during an epoch
 
 # loading MNIST dataset
-mndata = MNIST('../data/mnist/MNIST/raw/')
-# mndata.gz = False
+iris = load_iris()
+raw_data_max = np.quantile(iris.data, 0.95)  # which is np.max(iris.data)
 
-Images, Labels = mndata.load_training()
-Images = np.array(Images)
-for i in range(len(Labels)):
-    if Labels[i] in cats:
-        images.append(np.floor((GrayLevels - Images[i].reshape(28, 28)) * tmax / GrayLevels).astype(int))
-        labels.append(cats.index(Labels[i]))
+raw_inputs, raw_labels = iris.data, iris.target # type: ignore
+raw_inputs = np.array(raw_inputs)
+for i in range(len(raw_labels)):
+    if raw_labels[i] in cats:
+        inputs_list.append(np.floor((raw_data_max - raw_inputs[i].reshape(4, 1)) * tmax / raw_data_max).astype(int))
+        labels_list.append(cats.index(raw_labels[i]))
 
-Images, Labels = mndata.load_testing()
-Images = np.array(Images)
-for i in range(len(Labels)):
-    if Labels[i] in cats:
+raw_inputs, raw_labels = iris.data, iris.target # type: ignore
+raw_inputs = np.array(raw_inputs)
+for i in range(len(raw_labels)):
+    if raw_labels[i] in cats:
         # images_test.append(TTT[i].reshape(28,28).astype(int))
-        images_test.append(np.floor((GrayLevels - Images[i].reshape(28, 28)) * tmax / GrayLevels).astype(int))
-        labels_test.append(cats.index(Labels[i]))
+        test_inputs_list.append(np.floor((raw_data_max - raw_inputs[i].reshape(4, 1)) * tmax / raw_data_max).astype(int))
+        test_labels_list.append(cats.index(raw_labels[i]))
 
-del Images, Labels
+del raw_inputs, raw_labels
 
-images = cp.asarray(images)
-labels = cp.asarray(labels)
-images_test = cp.asarray(images_test)
-labels_test = cp.asarray(labels_test)
+TInput = np.ndarray[tuple[int,int,int], np.dtype[np.int_]]
+TLabel = np.ndarray[tuple[int], np.dtype[np.int_]]
+inputs:TInput = cp.asarray(inputs_list)
+labels:TLabel = cp.asarray(labels_list)
+test_inputs:TInput = cp.asarray(test_inputs_list)
+test_labels:TLabel = cp.asarray(test_labels_list)
 
 # Building the model
-layerSize = [[images[0].shape[0], images[0].shape[1]], [NhidenNeurons, 1], [NumOfClasses, 1]]
+layerSize = [[inputs[0].shape[0], inputs[0].shape[1]], [NhidenNeurons, 1], [NumOfClasses, 1]]
 x = cp.mgrid[0:layerSize[0][0], 0:layerSize[0][1]]  # To be used in converting raw image into a spike image
 SpikeImage = cp.zeros((layerSize[0][0], layerSize[0][1], tmax + 1))  # To keep spike image
 
@@ -117,10 +119,10 @@ for epoch in tqdm(range(Nepoch), desc="Epoch"):
     FiringFrequency = cp.zeros((NhidenNeurons))
 
     # Start an epoch
-    for iteration in tqdm(range(len(images)), desc="Iteration", leave=False):
+    for iteration in (pbar:=tqdm(range(len(inputs)), leave=False)):
         # converting input image into spiking image
         SpikeImage[:, :, :] = 0
-        SpikeImage[x[0], x[1], images[iteration]] = 1
+        SpikeImage[x[0], x[1], inputs[iteration]] = 1
 
         # Feedforward path
         for layer in range(Nlayers):
@@ -129,6 +131,7 @@ for epoch in tqdm(range(Nepoch), desc="Epoch"):
             firingTime[layer] = cp.argmax(Voltage > thr[layer], axis=1).astype(
                 float) + 1  # Findign the first threshold crossing
             firingTime[layer][firingTime[layer] > tmax] = tmax  # Forcing the fake spike
+            pbar.desc = f"{min(firingTime[layer])}"
 
             Spikes[layer][:, :, :] = 0
             Spikes[layer][X[layer][0], X[layer][1], firingTime[layer].reshape(Nnrn[layer], 1).astype(
@@ -179,7 +182,7 @@ for epoch in tqdm(range(Nepoch), desc="Epoch"):
         if (norm != 0):
             delta_h = delta_h / norm
         # Updating input-hidden weights
-        hasFired_h = images[iteration] < firingTime[layer][:, cp.newaxis,
+        hasFired_h = inputs[iteration] < firingTime[layer][:, cp.newaxis,
                                          cp.newaxis]  # To find which input neurons has fired before the hidden neurons
         W[layer] -= lr[layer] * delta_h[:, cp.newaxis, cp.newaxis] * hasFired_h  # Update input-hidden weights
         W[layer] -= lr[layer] * lamda[layer] * W[layer]  # Weight regularization
@@ -209,9 +212,9 @@ for epoch in tqdm(range(Nepoch), desc="Epoch"):
 
     # Evaluating on train samples
     correct = 0
-    for iteration in tqdm(range(len(images)), desc="Eval Trainset", leave=False):
+    for iteration in tqdm(range(len(inputs)), desc="Eval Trainset", leave=False):
         SpikeImage[:, :, :] = 0
-        SpikeImage[x[0], x[1], images[iteration]] = 1
+        SpikeImage[x[0], x[1], inputs[iteration]] = 1
         for layer in range(Nlayers):
             Voltage = cp.cumsum(cp.tensordot(W[layer], SpikeList[layer]), 1)
             Voltage[:, tmax] = thr[layer] + 1
@@ -230,7 +233,7 @@ for epoch in tqdm(range(Nepoch), desc="Epoch"):
                 correct += 1
         # if np.argmin(firingTime[-1]) == labels[iteration]:
         #     correct += 1
-    trainPerf = correct / len(images)
+    trainPerf = correct / len(inputs)
 
     # print('epoch= ', epoch, 'Perf_train= ', trainPerf, 'Perf_test= ', testPerf)
     print('epoch= ', epoch, 'Perf_train= ', trainPerf)
@@ -246,7 +249,7 @@ for epoch in tqdm(range(Nepoch), desc="Epoch"):
         #     best_perf = testPerf
         save_dir_path = osp.join(
             osp.dirname(__file__),
-            f"../models/{tmax}_784_{NhidenNeurons}_{NumOfClasses}")
+            f"../models/{tmax}_4_{NhidenNeurons}_{NumOfClasses}")
         if not osp.isdir(save_dir_path):
             os.mkdir(save_dir_path)
         if trainPerf > best_perf:
@@ -256,7 +259,7 @@ for epoch in tqdm(range(Nepoch), desc="Epoch"):
             best_perf = trainPerf
 
     # To find and reset dead neurons
-    ResetCheck = FiringFrequency < 0.001 * len(images)
+    ResetCheck = FiringFrequency < 0.001 * len(inputs)
     ToReset = [i for i in range(NhidenNeurons) if ResetCheck[i]]
     for i in ToReset:
         W[0][i] = cp.asarray((b[0] - a[0]) * np.random.random_sample((layerSize[0][0], layerSize[0][1])) + a[0])  # r
