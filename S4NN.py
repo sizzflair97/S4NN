@@ -26,6 +26,7 @@ if GPU:
 else:
     cp=np
 
+cp.cuda.Device(1).use()
 # Parameter setting
 thr = [100, 100]  # The threshold of hidden and output neurons
 lr = [.2, .2]  # The learning rate of hidden and ouput neurons
@@ -35,11 +36,11 @@ a = [0, 0]  # The lower bound of weight initializations for hidden and ouput neu
 Nepoch = 100  # The maximum number of training epochs
 NumOfClasses = 10  # Number of classes
 Nlayers = 2  # Number of layers
-NhidenNeurons = 10  # Number of hidden neurons
+NhidenNeurons = 20  # Number of hidden neurons
 Dropout = [0, 0]
-tmax = 5  # Simulatin time
+tmax = 8 - 1  # Simulatin time
 GrayLevels = 255  # Image GrayLevels
-gamma = 3  # The gamma parameter in the relative target firing calculation
+gamma = 5  # The gamma parameter in the relative target firing calculation
 
 # General settings
 loading = False  # Set it as True if you want to load a pretrained model
@@ -111,7 +112,7 @@ if loading:
 SpikeList = [SpikeImage] + Spikes
 
 # Start learning
-for epoch in tqdm(range(Nepoch), desc="Epoch"):
+for epoch in tqdm(range(Nepoch), desc=f"{tmax+1} step, {NhidenNeurons} hidden, Epoch"):
     start_time = time.time()
     correct = cp.zeros(NumOfClasses)
     FiringFrequency = cp.zeros((NhidenNeurons))
@@ -246,7 +247,7 @@ for epoch in tqdm(range(Nepoch), desc="Epoch"):
         #     best_perf = testPerf
         save_dir_path = osp.join(
             osp.dirname(__file__),
-            f"../models/{tmax}_784_{NhidenNeurons}_{NumOfClasses}")
+            f"../models/{tmax+1}_784_{NhidenNeurons}_{NumOfClasses}")
         if not osp.isdir(save_dir_path):
             os.mkdir(save_dir_path)
         if trainPerf > best_perf:

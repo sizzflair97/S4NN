@@ -28,10 +28,10 @@ else:
     cp=np
 
 # Parameter setting
-thr = [100, 100]  # The threshold of hidden and output neurons
-lr = [0.2, 0.2]  # The learning rate of hidden and ouput neurons
-lamda = [0]*2  # The regularization penalty for hidden and ouput neurons
-b = [200, 50]  # The upper bound of weight initializations for hidden and ouput neurons
+thr = [1, 100]  # The threshold of hidden and output neurons
+lr = [0.05, 0.05]  # The learning rate of hidden and ouput neurons
+lamda = [0.000001, 0.000001]  # The regularization penalty for hidden and ouput neurons
+b = [5, 50]  # The upper bound of weight initializations for hidden and ouput neurons
 a = [0, 0]  # The lower bound of weight initializations for hidden and ouput neurons
 Nepoch = 100  # The maximum number of training epochs
 NumOfClasses = 3  # Number of classes
@@ -39,7 +39,7 @@ Nlayers = 2  # Number of layers
 NhidenNeurons = 10  # Number of hidden neurons
 Dropout = [0, 0]
 tmax = 5  # Simulatin time
-gamma = 3  # The gamma parameter in the relative target firing calculation
+gamma = 1  # The gamma parameter in the relative target firing calculation
 
 # General settings
 loading = False  # Set it as True if you want to load a pretrained model
