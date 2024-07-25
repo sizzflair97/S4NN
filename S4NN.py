@@ -26,7 +26,7 @@ if GPU:
 else:
     cp=np
 
-cp.cuda.Device(1).use()
+cp.cuda.Device(0).use()
 # Parameter setting
 thr = [100, 100]  # The threshold of hidden and output neurons
 lr = [.2, .2]  # The learning rate of hidden and ouput neurons
@@ -36,11 +36,11 @@ a = [0, 0]  # The lower bound of weight initializations for hidden and ouput neu
 Nepoch = 100  # The maximum number of training epochs
 NumOfClasses = 10  # Number of classes
 Nlayers = 2  # Number of layers
-NhidenNeurons = 20  # Number of hidden neurons
+NhidenNeurons = 18  # Number of hidden neurons
 Dropout = [0, 0]
-tmax = 8 - 1  # Simulatin time
+tmax = 5 - 1  # Simulatin time
 GrayLevels = 255  # Image GrayLevels
-gamma = 5  # The gamma parameter in the relative target firing calculation
+gamma = 2  # The gamma parameter in the relative target firing calculation
 
 # General settings
 loading = False  # Set it as True if you want to load a pretrained model
